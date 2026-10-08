@@ -1,23 +1,138 @@
 \documentclass{article}
 \usepackage[utf8]{inputenc}
-\usepackage{amsmath,graphicx,booktabs}
-% TODO: replace with neurips_2026.sty
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,graphicx,booktabs,xcolor,hyperref}
+% TODO: replace with neurips_2026.sty when available
+\newcommand{\TBD}[1]{\textcolor{red}{[TBD: #1]}}
+\newcommand{\sfs}{s}      % softening scale
 \title{Softness Is Not Noise: Detecting Systematic PES Softening\\in Universal Atomistic Models}
 \author{Anonymous}
 \begin{document}
 \maketitle
+
 \begin{abstract}
-Universal machine-learned interatomic potentials systematically underestimate potential-energy-surface curvature (``softening''). We ask whether uncertainty estimates detect softening specifically, rather than large errors, and introduce a curvature-fidelity benchmark spanning crystals (phonons) and molecules (vibrational spectra). \textbf{[Results TBD]}
+Universal machine-learned interatomic potentials (uMLIPs) systematically underestimate the curvature of the potential-energy surface (PES), a bias called \emph{softening}. Prior work documented it for crystals and showed that a cheap fine-tuning step reduces it, but did not ask whether the uncertainty estimates used in practice can \emph{flag} it. We (i) introduce a curvature-fidelity benchmark that covers crystals (phonons) and molecules (gas-phase harmonic vibrational frequencies) under one metric, (ii) propose a statistical test of whether ensemble disagreement and latent-space distance detect softening specifically rather than merely large errors, using a partial correlation with the log softening scale controlling for absolute error, and (iii) compare two cheap corrections, single-point fine-tuning and Hessian calibration. This draft contains the full protocol only; \textbf{no experiment has been run, and all results are placeholders:} \TBD{one-sentence headline result after experiments}.
 \end{abstract}
+
 \section{Introduction}
-Softening~\cite{deng2025softening}; uncertainty for foundation models~\cite{hetero2025}; gap: no link between the two, no molecular curvature benchmark.
-\section{Related Work}
-See \texttt{docs/novelty\_search.md}.
-\section{Curvature-Fidelity Metrics}
-Softening scale $s=\langle y,\hat y\rangle/\langle y,y\rangle$; Hessian eigenvalue / frequency error; band-wise softening.
-\section{Experiments}
-\subsection{Crystals (phonons)}\subsection{Molecules (vibrational spectra)}\subsection{Uncertainty vs.\ softening}\subsection{Cheap correction}
-\section{Discussion and Limitations}
+Universal MLIPs such as M3GNet, CHGNet and MACE-MP-0 are used as drop-in replacements for DFT across chemistry and materials science. Deng et al.~\cite{deng2025softening} showed that these models systematically underestimate PES curvature: predicted energies, forces and phonon frequencies are too small in magnitude, with a softening scale (slope of predicted versus reference values) below one. They report this for surfaces, defects, phonons and ion migration, trace it to biased sampling near energy minima in the pretraining data, and show that fine-tuning on one additional point largely corrects it. They further report that more than 90\% of 1000 WBM compounds have softening scale below one for all three models.
+
+Two questions remain open. First, \emph{can the softening be detected without a reference calculation?} A practitioner who cannot afford DFT needs a signal that says ``this prediction is too soft''. Uncertainty estimates are the natural candidate~\cite{hetero2025}, but they are validated against absolute error. Softening is a \emph{signed, systematic} error shared by training-data bias, so there is reason to suspect that an ensemble of models trained on the same data agrees on a wrong, too-soft answer. This is a hypothesis we state as an inference, not a result. Second, does softening appear outside periodic materials? To our knowledge no gas-phase harmonic-frequency benchmark of \emph{universal} MLIPs exists (see Section~\ref{sec:related}), so the question is untested for molecules.
+
+\paragraph{Contributions.}
+\begin{enumerate}
+\item A curvature-fidelity benchmark with one metric family (softening scale, frequency error, band-wise softening) over crystal phonons and molecular harmonic frequencies, with a unified table format.
+\item An experimental design with an exact statistic for testing whether uncertainty detects softening \emph{beyond} error magnitude (Section~\ref{sec:uq}).
+\item A comparison of two cheap corrections, single-point fine-tuning and Hessian calibration, under the same metrics.
+\item A cross-domain, cross-functional analysis of how softening transfers between PBE crystals and wB97x molecules.
+\end{enumerate}
+Results for contributions 1--4 are \TBD{to be filled after experiments}; this draft fixes protocol and analysis plan before any data are seen.
+
+\section{Related Work}\label{sec:related}
+\paragraph{Softening in uMLIPs.} Deng et al.~\cite{deng2025softening} define the softening scale and establish the phenomenon for M3GNet, CHGNet and MACE-MP-0 on materials. They offer no uncertainty analysis and no molecules.
+
+\paragraph{Uncertainty for foundation models.} Liu et al.~\cite{hetero2025} build a heterogeneous ensemble of 11 uMLIPs whose disagreement defines an uncertainty metric $U$, tested against true error and used for uncertainty-aware distillation. Softening appears only as background, and softening detection is not tested. Whether disagreement misses a bias shared by all members is our inference, not a result of that work.
+
+\paragraph{Bias and fine-tuning.} Wong and Yang~\cite{wong2026bias} study MACE-MP-0b fine-tuning and observe out-of-domain softening through residuals and bond-length distributions. They describe their Q-residual as strictly an outlier detector rather than a measure of unphysical MD behavior, and report no Hessian or phonon analysis. We have read this work only partly (see Limitations). Fine-tuning studies~\cite{finetunetutorial2025,finetunestudy2025} also relate bias to the energy range of fine-tuning data.
+
+\paragraph{Benchmarks.} MLIPAudit~\cite{mlipaudit2025} benchmarks molecular tasks but, as far as we found, has no Hessian test. A recent benchmark of infrared spectra~\cite{irbench2026} concerns custom-trained models only. The MACE-MP-0 paper~\cite{batatia2025foundation} reports crystal phonons only. Hessian-based training and tooling exist~\cite{hessiandistill2025}. The molecular Hessian dataset we use as reference is from~\cite{hessianqm9}.
+
+\paragraph{Novelty status.} Our literature search was a partial pass, not exhaustive; claims of absence are limited to what we found (see Limitations and \texttt{docs/novelty\_search.md}).
+
+\section{Problem Setup and Metrics}\label{sec:metrics}
+Let $E_\theta(\mathbf{x})$ be a model PES and $E^\ast$ a reference (DFT). At an equilibrium geometry $\mathbf{x}_0$ of the reference, the Hessian is $H^\ast = \nabla^2 E^\ast(\mathbf{x}_0)$ and the model Hessian is $\hat H=\nabla^2 E_\theta(\mathbf{x}_0)$. We evaluate the model at the reference geometry; a separate protocol (Section~\ref{sec:protocol}) evaluates at model-relaxed geometries.
+
+\paragraph{Softening scale.} For reference values $y_i$ and predictions $\hat y_i$ (frequencies, Hessian eigenvalues, or forces), 
+\begin{equation}
+\sfs=\frac{\sum_i y_i\hat y_i}{\sum_i y_i^2},
+\end{equation}
+the least-squares slope through the origin (\texttt{softening\_slope}). $\sfs<1$ indicates softening. For frequencies we also report the slope on $\omega^2$, since $\omega^2$ is proportional to curvature: $\sfs_{\omega^2}$.
+
+\paragraph{Frequency error.} 
+\begin{equation}
+\mathrm{MAPE}_\omega=\frac1N\sum_i\frac{|\hat\omega_i-\omega_i|}{|\omega_i|}.
+\end{equation}
+Frequencies come from the mass-weighted Hessian $D=M^{-1/2}HM^{-1/2}$ with $\omega_i=\mathrm{sgn}(\lambda_i)\sqrt{|\lambda_i|}/2\pi c$. For molecules, the six (five for linear) translation/rotation modes are projected out before comparison and modes are matched by sorted order. For crystals, phonons are computed with phonopy on the same supercell as the reference.
+
+\paragraph{Band-wise softening.} Frequencies are split into bands (e.g.\ low, mid, high; band edges \TBD{choose before seeing data}) and $\sfs_b$ is computed per band, to test whether softening is uniform or concentrated in stiff modes.
+
+\paragraph{Per-system quantities.} Each system $j$ (a crystal or a molecule) gets one $\sfs_j$, one $\mathrm{MAPE}_{\omega,j}$, and a scalar absolute error $e_j=\mathrm{MAPE}_{\omega,j}$ (alternatively $\|\hat H-H^\ast\|_F/\|H^\ast\|_F$, reported as a robustness check).
+
+\paragraph{Functional mismatch.} Models are trained on different functionals than the molecular reference (e.g.\ MACE-OFF23 on wB97M-D3BJ versus the wB97x/6-31G* reference). Absolute $\sfs$ on molecules therefore mixes true softening with functional differences. We report a standard harmonic frequency scale factor for the reference level and compare \emph{relative} softening, i.e.\ $\sfs$ against that of a reference-level control where available, and across models on the same molecules.
+
+\section{Benchmark Protocol}\label{sec:protocol}
+\paragraph{Crystals.} 50--100 materials with DFT phonons from the Togo/MDR phonon database (PBE reference), exact selection \TBD{list and filter criteria}. Models: M3GNet (matgl), CHGNet, MACE-MP-0. Output: $\sfs$, $\mathrm{MAPE}_\omega$ per material and model.
+
+\paragraph{Molecules.} About 100 QM9 molecules from the Hessian QM9 dataset~\cite{hessianqm9} (wB97x/6-31G* reference), selection \TBD{sampling rule, size range}. Models: MACE-MP-0, MACE-OFF23, M3GNet, CHGNet, optionally UMA-s. Hessians by finite differences of forces (\texttt{numerical\_hessian}, step $\delta=0.01$~\AA) and checked against automatic differentiation on 3--5 molecules; step-size sensitivity \TBD{reported in appendix}. Molecules are evaluated at the reference geometry, and additionally after model relaxation, to separate curvature error from geometry error.
+
+\paragraph{Common format.} Both domains emit rows \texttt{system, model, domain, functional, ref\_value, pred\_value, softening\_scale, freq\_mape}.
+
+\paragraph{Planned results table.}
+\begin{table}[h]
+\centering
+\caption{Softening scale $\sfs$ and $\mathrm{MAPE}_\omega$ per model and domain (median and interquartile range over systems). \TBD{all entries pending experiments}}
+\begin{tabular}{llcc}
+\toprule
+Domain & Model & $\sfs$ & $\mathrm{MAPE}_\omega$\\
+\midrule
+Crystal & M3GNet & \TBD{} & \TBD{}\\
+Crystal & CHGNet & \TBD{} & \TBD{}\\
+Crystal & MACE-MP-0 & \TBD{} & \TBD{}\\
+Molecule & MACE-MP-0 & \TBD{} & \TBD{}\\
+Molecule & MACE-OFF23 & \TBD{} & \TBD{}\\
+Molecule & (others) & \TBD{} & \TBD{}\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Does Uncertainty Detect Softening?}\label{sec:uq}
+\paragraph{Uncertainty signals.} (a) \emph{Ensemble disagreement} $u^{\mathrm{ens}}_j$: standard deviation across ensemble members of predicted frequencies (or Hessian eigenvalues), averaged over modes, normalized by the mean predicted value. Two ensembles are considered: a heterogeneous one (different architectures, in the spirit of~\cite{hetero2025}) and a homogeneous one (seeds or fine-tuned replicas of a single model). (b) \emph{Latent-space distance} $u^{\mathrm{lat}}_j$: mean distance of the system's atomic embeddings to their $k$ nearest neighbours in the training or a reference embedding set (the embedding set is \TBD{choose, depends on data availability}).
+
+\paragraph{Hypotheses.} H1: uncertainty correlates with error magnitude. H2: uncertainty correlates with softening \emph{beyond} error magnitude. H3: ensemble disagreement is blind to softening shared by all members (homogeneous worse than heterogeneous).
+
+\paragraph{Exact statistic.} Let $z_j=-\log \sfs_j$ (positive for softening) and $e_j$ as above. For each uncertainty signal $u$, domain and model, we compute the Spearman partial correlation $\rho_{uz\cdot e}$ of $u$ and $z$ controlling for $e$:
+\begin{equation}
+\rho_{uz\cdot e}=\frac{\rho_{uz}-\rho_{ue}\rho_{ze}}{\sqrt{(1-\rho_{ue}^2)(1-\rho_{ze}^2)}},
+\end{equation}
+where $\rho$ are Spearman rank correlations (equivalently, Pearson on ranks). Confidence intervals by bootstrap over systems (\TBD{number of resamples}); permutation test for $\rho_{uz\cdot e}=0$ with multiple-comparison correction \TBD{method}. Since $\sfs_j$ and $e_j$ are both functions of the same predictions and are expected to be correlated, we also report $\rho_{ue}$ and $\rho_{ze}$ and a binary detection AUROC for ``soft'' systems ($\sfs_j<1-\tau$, $\tau$ \TBD{fixed a priori}) with a matched-error stratified AUROC computed within error quantile bins.
+
+\paragraph{Reading the outcome.} A detector of softening specifically has $\rho_{uz\cdot e}$ clearly above zero. A pure error detector has large $\rho_{ue}$ and $\rho_{uz\cdot e}\approx 0$. Both outcomes are informative; we commit to reporting either. \TBD{observed values}.
+
+\paragraph{Figure stubs.} Fig.~\ref{fig:unc}: uncertainty versus $\log \sfs$, colored by $e$.
+\begin{figure}[h]
+\centering
+\fbox{\parbox{0.8\linewidth}{\centering\vspace{2em}\TBD{scatter of $u$ versus $-\log\sfs$ per domain; panels for ensemble and latent}\vspace{2em}}}
+\caption{Placeholder: uncertainty versus softening, with partial correlations annotated.}\label{fig:unc}
+\end{figure}
+
+\section{Cheap Corrections}\label{sec:correction}
+\paragraph{Single-point fine-tuning.} Following the one-point idea of Deng et al.~\cite{deng2025softening}: fine-tune on one additional reference calculation per system family (e.g.\ a displaced structure with energy and forces), \TBD{exact protocol, learning rate, which parameters are trained, frozen-model baselines}.
+
+\paragraph{Hessian calibration.} Fit a low-dimensional correction using a few reference Hessian (or force-difference) data points, for instance a per-model scalar or per-band rescaling $\hat H \to \alpha\hat H$ with $\alpha$ fitted by least squares, or a few-parameter fine-tuning against reference Hessian entries. The parameterization is \TBD{decide; a scalar post-hoc rescaling is a baseline and cannot fix geometry error}.
+
+\paragraph{Evaluation.} Compare $\sfs$ and $\mathrm{MAPE}_\omega$ before and after on held-out systems; report cost (number of reference calculations) and whether the correction generalizes across domain and functional. We also test whether uncertainty drops after correction. Results: \TBD{pending}.
+
+\begin{figure}[h]
+\centering
+\fbox{\parbox{0.8\linewidth}{\centering\vspace{2em}\TBD{$\sfs$ before/after for each correction, per model and domain}\vspace{2em}}}
+\caption{Placeholder: effect of cheap corrections on softening scale.}
+\end{figure}
+
+\section{Expected Results (Hypotheses, Not Findings)}
+Based on~\cite{deng2025softening} we expect $\sfs<1$ for crystals; whether molecules show the same is open, and the functional mismatch can hide it. We do not claim any outcome. \TBD{results summary}
+
+\section{Limitations}
+\begin{itemize}
+\item \textbf{No results yet.} No experiment has been run; all numbers are placeholders and the claims above are protocols and hypotheses.
+\item \textbf{Partial novelty check.} The literature search was a quick pass. Wong and Yang~\cite{wong2026bias} were only partly read, and the heterogeneous-ensemble work~\cite{hetero2025} was not verified from its full text on every point. Absence claims may be wrong; some bib titles are marked as recalled and need verification.
+\item \textbf{Functional mismatch.} Reference levels (PBE for crystals, wB97x/6-31G* for molecules) differ from the training levels of several models (e.g.\ wB97M-D3BJ for MACE-OFF23). Absolute molecular softening is confounded; we mitigate with a frequency scale factor and relative comparisons, which does not remove the confound.
+\item \textbf{Scope.} Small sample (about 50--100 crystals, about 100 molecules), small organic molecules only, harmonic regime only, local inference and small fine-tuning only.
+\item \textbf{Statistic.} Partial correlation controls only for the chosen error scalar; $\sfs$ and $e$ are mechanically related, so residual association may be weak by construction.
+\end{itemize}
+
+\section{Reproducibility}
+Code is in \texttt{src/curvature\_fidelity/} (\texttt{numerical\_hessian}, \texttt{vibrational\_frequencies}, \texttt{softening\_slope}, \texttt{frequency\_mape}); run scripts will live in \texttt{scripts/} and reproduce every table from one command each. Data (not committed) are downloaded from the sources named in the README; model versions, random seeds, finite-difference step and software versions will be recorded \TBD{versions and seeds}.
+
 \bibliographystyle{plain}
 \bibliography{refs}
 \end{document}
