@@ -1,0 +1,23 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,graphicx,booktabs}
+% TODO: replace with neurips_2026.sty
+\title{Softness Is Not Noise: Detecting Systematic PES Softening\\in Universal Atomistic Models}
+\author{Anonymous}
+\begin{document}
+\maketitle
+\begin{abstract}
+Universal machine-learned interatomic potentials systematically underestimate potential-energy-surface curvature (``softening''). We ask whether uncertainty estimates detect softening specifically, rather than large errors, and introduce a curvature-fidelity benchmark spanning crystals (phonons) and molecules (vibrational spectra). \textbf{[Results TBD]}
+\end{abstract}
+\section{Introduction}
+Softening~\cite{deng2025softening}; uncertainty for foundation models~\cite{hetero2025}; gap: no link between the two, no molecular curvature benchmark.
+\section{Related Work}
+See \texttt{docs/novelty\_search.md}.
+\section{Curvature-Fidelity Metrics}
+Softening scale $s=\langle y,\hat y\rangle/\langle y,y\rangle$; Hessian eigenvalue / frequency error; band-wise softening.
+\section{Experiments}
+\subsection{Crystals (phonons)}\subsection{Molecules (vibrational spectra)}\subsection{Uncertainty vs.\ softening}\subsection{Cheap correction}
+\section{Discussion and Limitations}
+\bibliographystyle{plain}
+\bibliography{refs}
+\end{document}
